@@ -18,8 +18,10 @@ pipeline {
     environment {
         BUILD_LOG_LEVEL = 'INFO'
         PIPELINE_LOG_LEVEL = 'DEBUG'
-        DOCKER_IMAGE_NAME = "myapp"
-        DOCKER_REGISTRY = "https://hub.docker.com/repository/docker/roshanshrestha88"     }
+        DOCKER_IMAGE_NAME = "roshanshrestha88/aws-express-app"
+        DOCKER_REGISTRY = "docker.io"
+        DOCKER_HOST = "tcp://devops-second-dind-1:2375"
+    }
     
     stages {
         stage('Setup Environment') {
@@ -27,6 +29,16 @@ pipeline {
                 echo "Setting up Node.js environment..."
                 sh 'node --version || echo "Node.js not found"'
                 sh 'npm --version || echo "npm not found"'
+                
+                echo "Setting up Docker environment..."
+                script {
+                    try {
+                        sh 'docker --version || echo "Docker not found, installing..."'
+                        sh 'apt-get update && apt-get install -y docker.io || echo "Docker installation failed"'
+                    } catch (Exception e) {
+                        echo "Docker setup failed: ${e.getMessage()}"
+                    }
+                }
                 echo "Environment setup completed"
             }
         }
@@ -85,6 +97,14 @@ pipeline {
                 echo "Building Docker image..."
                 script {
                     try {
+                        // Set Docker environment variables
+                        sh "export DOCKER_HOST=${DOCKER_HOST}"
+                        sh "export DOCKER_TLS_CERTDIR="
+                        
+                        // Test Docker connection
+                        sh "docker info || echo 'Docker info failed, trying alternative approach'"
+                        
+                        // Build Docker image
                         sh "docker build -t ${DOCKER_IMAGE_NAME}:${BUILD_NUMBER} ."
                         sh "docker tag ${DOCKER_IMAGE_NAME}:${BUILD_NUMBER} ${DOCKER_IMAGE_NAME}:latest"
                         echo "Docker image built successfully"
@@ -106,6 +126,14 @@ pipeline {
                 echo "Pushing Docker image to registry..."
                 script {
                     try {
+                        // Set Docker environment variables
+                        sh "export DOCKER_HOST=${DOCKER_HOST}"
+                        sh "export DOCKER_TLS_CERTDIR="
+                        
+                        // Login to Docker Hub (you'll need to configure credentials)
+                        sh "echo 'Docker login would be required here'"
+                        
+                        // Push Docker images
                         sh "docker push ${DOCKER_IMAGE_NAME}:${BUILD_NUMBER}"
                         sh "docker push ${DOCKER_IMAGE_NAME}:latest"
                         echo "Docker image pushed successfully"
