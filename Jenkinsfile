@@ -58,14 +58,24 @@ pipeline {
         stage('Security Scan') {
             steps {
                 echo "Starting security vulnerability scan..."
-                sh 'npm install -g snyk'
-                sh 'snyk test --severity-threshold=high --json > snyk-results.json || true'
-                echo "Security scan completed"
+                script {
+                    try {
+                        // Try to install Snyk locally first
+                        sh 'npm install snyk --save-dev'
+                        sh 'npx snyk test --severity-threshold=high --json > snyk-results.json || echo "Snyk scan completed with issues"'
+                        echo "Security scan completed"
+                    } catch (Exception e) {
+                        echo "Snyk installation failed, trying alternative approach..."
+                        // Use npm audit as fallback
+                        sh 'npm audit --json > npm-audit-results.json || echo "npm audit completed"'
+                        echo "Using npm audit as security scan fallback"
+                    }
+                }
             }
             post {
                 always {
                     // Archive security scan results
-                    archiveArtifacts artifacts: 'snyk-results.json', fingerprint: true, allowEmptyArchive: true
+                    archiveArtifacts artifacts: '**/*.log, **/target/*.jar, **/dist/*, **/build/*, **/snyk-results.json, **/npm-audit-results.json', fingerprint: true, allowEmptyArchive: true
                 }
             }
         }
