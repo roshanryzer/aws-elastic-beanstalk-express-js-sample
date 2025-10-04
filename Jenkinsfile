@@ -108,10 +108,12 @@ pipeline {
                             
                             # Test network connectivity first
                             echo "Testing network connectivity to dind service..."
-                            timeout 10 bash -c 'until nc -zv dind 2375; do echo "Waiting for dind service..."; sleep 2; done' || {
+                            timeout 30 bash -c 'until nc -zv dind 2375; do echo "Waiting for dind service..."; sleep 2; done' || {
                                 echo "Cannot reach dind service on port 2375"
                                 echo "Available services:"
                                 nslookup dind || echo "DNS lookup failed for dind"
+                                echo "Trying alternative connectivity test..."
+                                ping -c 3 dind || echo "Ping to dind failed"
                                 exit 1
                             }
                             
@@ -121,6 +123,8 @@ pipeline {
                                 echo "DOCKER_HOST is set to: ${DOCKER_HOST}"
                                 echo "Testing Docker daemon response..."
                                 curl -s http://dind:2375/version || echo "Cannot reach Docker daemon API"
+                                echo "Trying direct connection test..."
+                                nc -zv dind 2375 || echo "Direct netcat test failed"
                                 exit 1
                             }
                         """
@@ -176,8 +180,10 @@ pipeline {
                             echo "DOCKER_HOST is set to: ${DOCKER_HOST}"
                             
                             # Test network connectivity first
-                            timeout 10 bash -c 'until nc -zv dind 2375; do echo "Waiting for dind service..."; sleep 2; done' || {
+                            timeout 30 bash -c 'until nc -zv dind 2375; do echo "Waiting for dind service..."; sleep 2; done' || {
                                 echo "Cannot reach dind service on port 2375"
+                                echo "Trying alternative connectivity test..."
+                                ping -c 3 dind || echo "Ping to dind failed"
                                 exit 1
                             }
                             
@@ -186,6 +192,8 @@ pipeline {
                                 echo "Docker connection failed before push"
                                 echo "Testing Docker daemon response..."
                                 curl -s http://dind:2375/version || echo "Cannot reach Docker daemon API"
+                                echo "Trying direct connection test..."
+                                nc -zv dind 2375 || echo "Direct netcat test failed"
                                 exit 1
                             }
                         """
