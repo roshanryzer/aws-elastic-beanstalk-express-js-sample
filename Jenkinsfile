@@ -20,7 +20,7 @@ pipeline {
         PIPELINE_LOG_LEVEL = 'DEBUG'
         DOCKER_IMAGE_NAME = "roshanshrestha88/aws-express-app"
         DOCKER_REGISTRY = "docker.io"
-        DOCKER_HOST = "tcp://devops-second-dind-1:2375"
+        DOCKER_HOST = "tcp://project2-dind-1-1:2375"
     }
     
     stages {
@@ -101,17 +101,44 @@ pipeline {
                         sh "export DOCKER_HOST=${DOCKER_HOST}"
                         sh "export DOCKER_TLS_CERTDIR="
                         
-                        // Test Docker connection
-                        sh "docker info || echo 'Docker info failed, trying alternative approach'"
+                        // Test Docker connection with timeout
+                        sh """
+                            timeout 30 docker info || {
+                                echo "Docker info failed, checking connectivity..."
+                                echo "DOCKER_HOST is set to: ${DOCKER_HOST}"
+                                echo "Testing network connectivity..."
+                                nc -zv dind 2375 || echo "Cannot reach Docker daemon"
+                                exit 1
+                            }
+                        """
                         
-                        // Build Docker image
-                        sh "docker build -t ${DOCKER_IMAGE_NAME}:${BUILD_NUMBER} ."
+                        // Build Docker image with proper error handling
+                        sh """
+                            echo "Building Docker image: ${DOCKER_IMAGE_NAME}:${BUILD_NUMBER}"
+                            docker build -t ${DOCKER_IMAGE_NAME}:${BUILD_NUMBER} . || {
+                                echo "Docker build failed"
+                                exit 1
+                            }
+                        """
+                        
                         sh "docker tag ${DOCKER_IMAGE_NAME}:${BUILD_NUMBER} ${DOCKER_IMAGE_NAME}:latest"
                         echo "Docker image built successfully"
+                        
+                        // List built images for verification
+                        sh "docker images | grep ${DOCKER_IMAGE_NAME}"
+                        
                     } catch (Exception e) {
                         echo "Docker build failed: ${e.getMessage()}"
                         echo "This might be due to Docker not being available in the Jenkins agent"
                         echo "Continuing without Docker build for now..."
+                        
+                        // Try to diagnose the issue
+                        sh """
+                            echo "Diagnosing Docker connectivity issues..."
+                            echo "DOCKER_HOST: ${DOCKER_HOST}"
+                            echo "Available environment variables:"
+                            env | grep -i docker || echo "No Docker environment variables found"
+                        """
                     }
                 }
             }
@@ -130,17 +157,56 @@ pipeline {
                         sh "export DOCKER_HOST=${DOCKER_HOST}"
                         sh "export DOCKER_TLS_CERTDIR="
                         
-                        // Login to Docker Hub (you'll need to configure credentials)
-                        sh "echo 'Docker login would be required here'"
+                        // Test Docker connection before pushing
+                        sh """
+                            timeout 30 docker info || {
+                                echo "Docker connection failed before push"
+                                exit 1
+                            }
+                        """
                         
-                        // Push Docker images
-                        sh "docker push ${DOCKER_IMAGE_NAME}:${BUILD_NUMBER}"
-                        sh "docker push ${DOCKER_IMAGE_NAME}:latest"
+                        // Login to Docker Hub using Jenkins credentials
+                        withCredentials([usernamePassword(credentialsId: 'docker-hub-credentials', 
+                                                        usernameVariable: 'DOCKER_USERNAME', 
+                                                        passwordVariable: 'DOCKER_PASSWORD')]) {
+                            sh """
+                                echo "Logging into Docker Hub..."
+                                echo \${DOCKER_PASSWORD} | docker login -u \${DOCKER_USERNAME} --password-stdin
+                            """
+                        }
+                        
+                        // Push Docker images with proper error handling
+                        sh """
+                            echo "Pushing Docker image: ${DOCKER_IMAGE_NAME}:${BUILD_NUMBER}"
+                            docker push ${DOCKER_IMAGE_NAME}:${BUILD_NUMBER} || {
+                                echo "Failed to push ${DOCKER_IMAGE_NAME}:${BUILD_NUMBER}"
+                                exit 1
+                            }
+                        """
+                        
+                        sh """
+                            echo "Pushing Docker image: ${DOCKER_IMAGE_NAME}:latest"
+                            docker push ${DOCKER_IMAGE_NAME}:latest || {
+                                echo "Failed to push ${DOCKER_IMAGE_NAME}:latest"
+                                exit 1
+                            }
+                        """
+                        
                         echo "Docker image pushed successfully"
+                        
                     } catch (Exception e) {
                         echo "Docker push failed: ${e.getMessage()}"
                         echo "This might be due to Docker not being available or registry not configured"
                         echo "Continuing without Docker push for now..."
+                        
+                        // Provide helpful debugging information
+                        sh """
+                            echo "Docker push debugging information:"
+                            echo "DOCKER_HOST: ${DOCKER_HOST}"
+                            echo "DOCKER_IMAGE_NAME: ${DOCKER_IMAGE_NAME}"
+                            echo "BUILD_NUMBER: ${BUILD_NUMBER}"
+                            docker images | grep ${DOCKER_IMAGE_NAME} || echo "No images found with name ${DOCKER_IMAGE_NAME}"
+                        """
                     }
                 }
             }
