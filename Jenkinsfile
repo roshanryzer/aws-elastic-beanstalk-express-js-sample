@@ -106,7 +106,7 @@ pipeline {
                             echo "Testing Docker connectivity..."
                             echo "DOCKER_HOST is set to: ${DOCKER_HOST}"
                             
-                            // Test network connectivity first
+                            # Test network connectivity first
                             echo "Testing network connectivity to dind service..."
                             timeout 10 bash -c 'until nc -zv dind 2375; do echo "Waiting for dind service..."; sleep 2; done' || {
                                 echo "Cannot reach dind service on port 2375"
@@ -115,7 +115,7 @@ pipeline {
                                 exit 1
                             }
                             
-                            // Test Docker daemon
+                            # Test Docker daemon
                             timeout 30 docker info || {
                                 echo "Docker info failed, checking connectivity..."
                                 echo "DOCKER_HOST is set to: ${DOCKER_HOST}"
@@ -175,13 +175,13 @@ pipeline {
                             echo "Testing Docker connectivity before push..."
                             echo "DOCKER_HOST is set to: ${DOCKER_HOST}"
                             
-                            // Test network connectivity first
+                            # Test network connectivity first
                             timeout 10 bash -c 'until nc -zv dind 2375; do echo "Waiting for dind service..."; sleep 2; done' || {
                                 echo "Cannot reach dind service on port 2375"
                                 exit 1
                             }
                             
-                            // Test Docker daemon
+                            # Test Docker daemon
                             timeout 30 docker info || {
                                 echo "Docker connection failed before push"
                                 echo "Testing Docker daemon response..."
