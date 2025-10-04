@@ -20,7 +20,7 @@ pipeline {
         PIPELINE_LOG_LEVEL = 'DEBUG'
         DOCKER_IMAGE_NAME = "roshanshrestha88/aws-express-app"
         DOCKER_REGISTRY = "docker.io"
-        DOCKER_HOST = "tcp://project2-dind-1-1:2375"
+        DOCKER_HOST = "tcp://dind:2375"
     }
     
     stages {
@@ -103,11 +103,24 @@ pipeline {
                         
                         // Test Docker connection with timeout
                         sh """
+                            echo "Testing Docker connectivity..."
+                            echo "DOCKER_HOST is set to: ${DOCKER_HOST}"
+                            
+                            // Test network connectivity first
+                            echo "Testing network connectivity to dind service..."
+                            timeout 10 bash -c 'until nc -zv dind 2375; do echo "Waiting for dind service..."; sleep 2; done' || {
+                                echo "Cannot reach dind service on port 2375"
+                                echo "Available services:"
+                                nslookup dind || echo "DNS lookup failed for dind"
+                                exit 1
+                            }
+                            
+                            // Test Docker daemon
                             timeout 30 docker info || {
                                 echo "Docker info failed, checking connectivity..."
                                 echo "DOCKER_HOST is set to: ${DOCKER_HOST}"
-                                echo "Testing network connectivity..."
-                                nc -zv dind 2375 || echo "Cannot reach Docker daemon"
+                                echo "Testing Docker daemon response..."
+                                curl -s http://dind:2375/version || echo "Cannot reach Docker daemon API"
                                 exit 1
                             }
                         """
@@ -159,8 +172,20 @@ pipeline {
                         
                         // Test Docker connection before pushing
                         sh """
+                            echo "Testing Docker connectivity before push..."
+                            echo "DOCKER_HOST is set to: ${DOCKER_HOST}"
+                            
+                            // Test network connectivity first
+                            timeout 10 bash -c 'until nc -zv dind 2375; do echo "Waiting for dind service..."; sleep 2; done' || {
+                                echo "Cannot reach dind service on port 2375"
+                                exit 1
+                            }
+                            
+                            // Test Docker daemon
                             timeout 30 docker info || {
                                 echo "Docker connection failed before push"
+                                echo "Testing Docker daemon response..."
+                                curl -s http://dind:2375/version || echo "Cannot reach Docker daemon API"
                                 exit 1
                             }
                         """
